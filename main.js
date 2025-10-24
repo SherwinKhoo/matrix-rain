@@ -9,16 +9,15 @@ import { glitchEffect } from "./Utilities/glitch.js";
 // MARK: Worker
 const worker = new Worker("./Utilities/textWorker.js", { type: "module" });
 
-let characterBuffer = []; // rolling buffer of characters
+let characterBuffer = [];
+let gridParameters = calculateGrid();
 let columns = [];
-let gridParameters;
 let ctx;
 let requestAnimationFrameId = 0;
 
 // Buffer management tuning
 const refillThresholdMultiplier = 1.5;
 const msBetweenBufferChecks = 1000;
-let dynamicBuffer;
 
 // Frame timing
 const frameLimit = 1000 / CONFIG.FRAME_RATE_LIMIT;
@@ -77,14 +76,11 @@ function resetColumn(columnIndex) {
 
 // MARK: Column Initialisation
 function tryInitialiseColumns() {
+  const availableCols = gridParameters.columns;
+
   if (columns.length || !gridParameters) {
     return;
   }
-  if (characterBuffer.length < gridParameters.rows) {
-    return;
-  }
-
-  const availableCols = gridParameters.columns;
 
   console.log(`Initialising ${availableCols} columns`);
   for (let i = 0; i < availableCols; i++) {
@@ -93,27 +89,24 @@ function tryInitialiseColumns() {
 }
 
 // MARK: Canvas Setup
-function initialiseCanvas() {
+async function initialiseCanvas() {
   console.log("Initialising canvas...");
 
-  gridParameters = calculateGrid(
-    CONFIG.FONT_SIZE_DEFAULT,
-    CONFIG.FONT_BORDER_DEFAULT
-  );
-
   const canvas = document.querySelector("canvas");
+  ctx = canvas.getContext("2d");
 
   // Ensure full viewport coverage, not just computed grid width
-  canvas.width = window.innerWidth * (window.devicePixelRatio || 1);
-  canvas.height = window.innerHeight * (window.devicePixelRatio || 1);
-
-  ctx = canvas.getContext("2d");
-  ctx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  canvas.width = gridParameters.width;
+  canvas.height = gridParameters.height;
 
   ctx.font = `${gridParameters.fontSize}px "Noto Sans TC", "Microsoft JhengHei", monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillStyle = CONFIG.FONT_COLOUR;
+
+  console.log(
+    `columns=${gridParameters.columns} rows=${gridParameters.rows}\ncell=${gridParameters.cellSize}`
+  );
 }
 
 // MARK: Frame Loop
@@ -147,7 +140,7 @@ function update(now) {
       const char = glitchEffect(column.character[row]); // apply glitch
       ctx.fillText(
         char,
-        column.xCoordinate + gridParameters.fontSize / 2,
+        column.xCoordinate + gridParameters.cellSize / 2,
         column.yCoordinate(row)
       );
     }
@@ -207,19 +200,17 @@ let lastOrientation = screen.orientation?.angle ?? window.orientation ?? 0;
 function handleViewportChange() {
   clearTimeout(orientationTimeoutId);
   orientationTimeoutId = setTimeout(() => {
+    gridParameters = calculateGrid();
     const currentOrientation =
       screen.orientation?.angle ?? window.orientation ?? 0;
 
-    if (
-      currentOrientation !== lastOrientation ||
-      ctx.canvas.width !== window.innerWidth * (window.devicePixelRatio || 1) ||
-      ctx.canvas.height !== window.innerHeight * (window.devicePixelRatio || 1)
-    ) {
+    const newWidth = window.innerWidth;
+    const newHeight = window.innerHeight;
+
+    if (newWidth !== ctx.canvas.width || newHeight !== ctx.canvas.height) {
       lastOrientation = currentOrientation;
 
-      console.log(
-        "[Matrix] Viewport or orientation changed, reinitialising..."
-      );
+      console.log("Viewport or orientation changed, reinitialising...");
 
       cancelAnimationFrame(requestAnimationFrameId);
       columns = [];
@@ -235,12 +226,8 @@ function handleViewportChange() {
 
       requestAnimationFrameId = requestAnimationFrame(update);
     }
-  }, 500); // debounce delay
+  }, 1000); // debounce delay
 }
 
 window.addEventListener("resize", handleViewportChange);
 window.addEventListener("orientationchange", handleViewportChange);
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", handleViewportChange);
-}

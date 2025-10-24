@@ -1,5 +1,4 @@
 "use strict";
-
 import { CONFIG } from "./config.js";
 
 // Global variables
@@ -8,7 +7,7 @@ let index = 0;
 let isLoaded = false;
 
 // Configurable parameters
-const loopMultiplier = 1; // How many times to repeat the base text
+const loopMultiplier = 5; // How many times to repeat the base text
 const maxStreamBatchSize = 50000; // Safety cap
 
 // Utility: load and prepare text once
